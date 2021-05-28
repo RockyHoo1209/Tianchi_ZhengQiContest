@@ -2,7 +2,7 @@
 Description: 特征工程
 Author: Rocky Hoo
 Date: 2021-05-11 10:20:23
-LastEditTime: 2021-05-28 23:15:29
+LastEditTime: 2021-05-28 23:25:07
 LastEditors: Please set LastEditors
 CopyRight: 
 Copyright (c) 2021 XiaoPeng Studio
@@ -149,7 +149,7 @@ print(filter_mcorr.sort_values(ascending=False))
 #%%
 '''根据分析删除部分特征  '''
 #根据KDE删除特征
-drop_col=[5, 8, 17, 21, 22, 27, 35]
+drop_col=[5,9,17,19,20,21,22,27]
 #根据热力图，去掉一些相关性较弱的特征
 # drop_col=[col for col in drop_col1 if col not in filter_mcorr]
 drop_col+=filter_mcorr.index.tolist()
@@ -233,8 +233,8 @@ _=stats.probplot(data_all.target.dropna(), plot=plt)
 #Log Transform SalePrice to improve normality
 # Q:why this?
 sp = train_data.target
-train_data.target =np.power(1.5,sp)
-print(train_data.target.describe())
+train_data.target1 =np.power(1.5,sp)
+print(train_data.target1.describe())
 
 plt.figure(figsize=(12,4))
 plt.subplot(1,2,1)
