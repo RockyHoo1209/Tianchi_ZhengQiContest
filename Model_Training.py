@@ -2,7 +2,7 @@
 Description: 训练模型
 Author: Rocky Hoo
 Date: 2021-05-25 13:15:52
-LastEditTime: 2021-05-28 18:35:11
+LastEditTime: 2021-05-29 21:40:51
 LastEditors: Please set LastEditors
 CopyRight: 
 Copyright (c) 2021 XiaoPeng Studio
@@ -46,6 +46,7 @@ def MyLinearRegression(train_data,train_target,test_data,test_target):
     score=mean_squared_error(test_target,test_pred1)
     print("LR SCORE:%f"%score)
     return clf,test_pred1
+
 # %%
 def KNNRegression(train_data,train_target,test_data,test_target):
     #  KNN回归 score:0.334
@@ -67,18 +68,12 @@ print("DTR SCORE:%f"%score)
 # %%
 # 随机森林 score:0.000023
 def RFRegression(train_data,train_target,test_data,test_target):
-    randomForestRegressor=RandomForestRegressor()
-    parameters={
-        "n_estimators":[64,128,256,512,1024],
-        "max_depth":[2,4,8,16,32]
-    }
-    clf=RandomizedSearchCV(randomForestRegressor,parameters,cv=5)
+    clf=RandomForestRegressor(n_estimators=200)
     clf.fit(train_data,train_target)
     # models.append(clf)
     test_pred4=clf.predict(test_data)
     score=mean_squared_error(test_target,test_pred4)
     print("RF SCORE:%f"%score)
-    print(clf.cv_results_)
     return clf,test_pred4
 # %%
 def LGBRegression(train_data,train_target,test_data,test_target):

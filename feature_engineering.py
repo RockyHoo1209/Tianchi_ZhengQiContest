@@ -2,7 +2,7 @@
 Description: 特征工程
 Author: Rocky Hoo
 Date: 2021-05-11 10:20:23
-LastEditTime: 2021-05-28 23:25:07
+LastEditTime: 2021-05-29 23:01:54
 LastEditors: Please set LastEditors
 CopyRight: 
 Copyright (c) 2021 XiaoPeng Studio
@@ -13,11 +13,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_squared_error #均方差
 from scipy import stats
 sns.set(style='ticks')
 import warnings
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from sklearn.decomposition import PCA
+from sklearn.linear_model import Ridge,LinearRegression
 warnings.filterwarnings('ignore')
 #%%
 train_data=pd.read_csv("zhengqi_train.txt",sep="\t")
@@ -45,12 +47,12 @@ print(train_data.describe())
 print(test_data.describe())
 # %%
 ''' 最大值和最小值归一化 '''
-def scala_minmax(train_data,test_data,data_all):
+def scala_minmax(train_data,test_data):
     features_cols=[col for col in train_data.columns if col not in ["target"]]
     train_data_features=train_data[features_cols]
     test_data_features=test_data[features_cols]
-    data_all_features=data_all[features_cols]
-    # data_all_features=pd.concat([train_data_features,test_data_features],axis=0,ignore_index=True)
+    # data_all_features=data_all[features_cols]
+    data_all_features=pd.concat([train_data_features,test_data_features],axis=0,ignore_index=True)
     min_max_model=MinMaxScaler()
     # 数据量小，用所有数据归一化处理，保证分布相同
     train_data_scalar=min_max_model.fit(data_all_features)
@@ -61,14 +63,9 @@ def scala_minmax(train_data,test_data,data_all):
     train_data_scalar=pd.DataFrame(train_data_scalar)
     train_data_scalar["target"]=train_data["target"]
     train_data=train_data_scalar
-    temp_train_data=train_data.copy()
-    temp_test_data=test_data.copy()
-    temp_train_data["origin"]="train"
-    temp_test_data["origin"]="test"
-    data_all=pd.concat([temp_train_data,temp_test_data],axis=0,ignore_index=True)
-    return train_data,test_data,data_all
+    return train_data,test_data
 #%%
-train_data,test_data,data_all=scala_minmax(train_data,test_data,data_all)
+train_data,test_data=scala_minmax(train_data,test_data)
 #%%
 train_data.head()
 print(train_data.describe())
@@ -85,8 +82,8 @@ ax.set_ylabel("Frequency")
 ax.legend(["train","test"])
 #%%
 # 所有变量的KDE分析
-dist_rows=len(train_data.columns[:-2])
-train_cols=train_data.columns[:-2]
+dist_rows=len(train_data.columns[:-1])
+train_cols=train_data.columns[:-1]
 dist_cols=6
 each_width=4
 plt.figure(figsize=(each_width*dist_cols,each_width*dist_rows),dpi=150)
@@ -108,7 +105,7 @@ plt.show()
 # 直方图和KDE图对比
 # 结合上面两种方法筛选特征
 fig = plt.figure(figsize=(10, 10))
-for i in range(len(train_data.columns)-2):
+for i in range(len(train_data.columns)-1):
     g = sns.FacetGrid(data_all,col="origin")
     g = g.map(sns.distplot, data_all.columns[i])
 #%%
@@ -147,9 +144,71 @@ mcorr=mcorr.abs()
 filter_mcorr=mcorr[mcorr["target"]<0.1]["target"]
 print(filter_mcorr.sort_values(ascending=False))
 #%%
+''' 岭回归异常值去除 '''
+# 做完
+'''
+@description: 
+@param  {sigma:z值的临界值}
+@return {*}
+'''
+# cox-box后调用
+def find_outliers(model,X,y,sigma=3):
+    try:
+        y_pred=pd.Series(model.predict(X),index=y.index)
+    except:
+        model.fit(X,y)
+        y_pred=pd.Series(model.predict(X),index=y.index)
+
+    # 计算模型预测结果和实际值间的残差
+    resid=y-y_pred
+    mean_resid=resid.mean()
+    std_resid=resid.std()
+    # 计算z值，用来判断是否否定原假设
+    z=(resid-mean_resid)/std_resid
+    outliers=z[abs(z)>sigma].index
+
+    # 打印显示结果
+    print('R2=',model.score(X,y))
+    print("mse=",mean_squared_error(y,y_pred))
+    print("---------------------------------------------")
+
+    print("mean of residuals:",mean_resid)
+    print("std of residuals:",std_resid)
+    print("---------------------------------------------")
+
+    print(len(outliers),"outliers:",outliers.tolist())
+
+    plt.figure(figsize=(15,5))
+    ax_131=plt.subplot(1,3,1)
+    plt.plot(y,y_pred,'.')
+    plt.plot(y.loc[outliers],y_pred.loc[outliers],"ro")
+    plt.legend(["Accepted","outliers"])
+    plt.xlabel("y")
+    plt.ylabel("y_pred")
+
+    #显示残差图像    
+    ax_132=plt.subplot(1,3,2)
+    plt.plot(y,y-y_pred,".")
+
+    plt.plot(y.loc[outliers],y.loc[outliers]-y_pred.loc[outliers],"ro")
+    plt.legend(["Accepted","outliers"])
+    plt.xlabel("y")
+    plt.xlabel("y-y_pred")
+
+    ax_133=plt.subplot(1,3,3)
+    z.plot.hist(bins=50,ax=ax_133)
+    z.loc[outliers].plot.hist(color='r',bins=50,ax=ax_133)
+    plt.legend(["Accepted","outliers"])
+    plt.xlabel('z')
+
+    plt.savefig("./outliers.png")
+    return outliers
+
+
+#%%
 '''根据分析删除部分特征  '''
 #根据KDE删除特征
-drop_col=[5,9,17,19,20,21,22,27]
+drop_col=[5, 9, 17, 21, 22, 27, 35]
 #根据热力图，去掉一些相关性较弱的特征
 # drop_col=[col for col in drop_col1 if col not in filter_mcorr]
 drop_col+=filter_mcorr.index.tolist()
@@ -170,7 +229,7 @@ def min_max(cols):
 #%%
 ''' Box-cox(正态化)变换 '''
 ''' 线性回归基于正态分布，故需将数据正态化 '''
-cols_numeric=list(train_data.columns[:-2])
+cols_numeric=list(train_data.columns[:-1])
 fcols=6
 frows=len(cols_numeric)
 plt.figure(figsize=(4*fcols,4*frows))
@@ -213,14 +272,14 @@ for col in cols_numeric:
     plt.title("corr=%.2f"%(np.corrcoef(trains_var,dat["target"])[0][1]))
 #%%
 ''' 对所有列进行boxcox转换 '''
-trans_cols=train_data.columns[:-2]
+trans_cols=train_data.columns[:-1]
 for col in trans_cols:
     train_data.loc[:,col], _ = stats.boxcox(train_data.loc[:,col]+1)
     test_data.loc[:,col], _ = stats.boxcox(test_data.loc[:,col]+1)
-    data_all.loc[:,col],_=stats.boxcox(data_all.loc[:,col]+1)
-    data_all.loc[:,col]=min_max(data_all.loc[:,col])
+    train_data.loc[:,col]=min_max(train_data.loc[:,col])
+    test_data.loc[:,col]=min_max(test_data.loc[:,col])
 # 归一化
-train_data,test_data,data_all=scala_minmax(train_data,test_data,data_all)
+train_data,test_data=scala_minmax(train_data,test_data)
 #%%
 # 查看target是否满足正态分布
 print(data_all.target.describe())
@@ -234,7 +293,7 @@ _=stats.probplot(data_all.target.dropna(), plot=plt)
 # Q:why this?
 sp = train_data.target
 train_data.target1 =np.power(1.5,sp)
-print(train_data.target1.describe())
+print(train_data.target.describe())
 
 plt.figure(figsize=(12,4))
 plt.subplot(1,2,1)
@@ -258,11 +317,13 @@ pca_new_test_data=pd.DataFrame(pca_new_test_data)
 pca_new_train_data["target"]=train_data["target"]
 print(pca_new_train_data.describe())
 print(train_data.describe())
+#%%
+outliers=find_outliers(LinearRegression(),train_data.iloc[:,:-1],train_data.iloc[:,-1])
+pca_new_train_data=pca_new_train_data.drop(outliers)
 # %%
 pca_new_train_data.to_csv("./new_train_pca_16.txt")
 # %%
 pca_new_test_data.to_csv("./new_test_pca_16.txt")
-
 # %%
 print("ok!")
 # %%
