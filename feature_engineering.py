@@ -2,7 +2,7 @@
 Description: 特征工程
 Author: Rocky Hoo
 Date: 2021-05-11 10:20:23
-LastEditTime: 2021-06-08 12:08:58
+LastEditTime: 2021-06-08 22:21:56
 LastEditors: Please set LastEditors
 CopyRight: 
 Copyright (c) 2021 XiaoPeng Studio
@@ -92,6 +92,7 @@ def FilterByBoxPlot(train_data,test_data):
     test_data=test_data[test_data['V9']>-7.5]
     print(train_data.describe())
     print(test_data.describe())
+FilterByBoxPlot(train_data,test_data)
 # %%
 ''' 最大值和最小值归一化 '''
 def scala_minmax(train_data,test_data):
@@ -400,24 +401,24 @@ print(train_data.head())
 train_data,test_data=FeaturesSelect(train_data,test_data,select_num=32)
 # %%
 '''  PCA降维，共线性转换'''
-# pca=PCA(n_components=15)
-# pca_new_train_data=pca.fit_transform(train_data)
-# pca_new_test_data=pca.fit_transform(test_data)
-# pca_new_train_data=pd.DataFrame(pca_new_train_data)
-# pca_new_test_data=pd.DataFrame(pca_new_test_data)
-# pca_new_train_data["target"]=train_data["target"]
-# print(pca_new_train_data.describe())
-# print(train_data.describe())
+pca=PCA(n_components=22)
+pca_new_train_data=pca.fit_transform(train_data)
+pca_new_test_data=pca.fit_transform(test_data)
+pca_new_train_data=pd.DataFrame(pca_new_train_data)
+pca_new_test_data=pd.DataFrame(pca_new_test_data)
+pca_new_train_data["target"]=train_data["target"]
+print(pca_new_train_data.describe())
+print(train_data.describe())
 #%%
 """ 通过岭回归去除异常值 """
-# outliers=find_outliers(Ridge(),train_data.iloc[:,:-1],train_data.iloc[:,-1])
-# pca_new_train_data=pca_new_train_data.drop(outliers)
+outliers=find_outliers(Ridge(),train_data.iloc[:,:-1],train_data.iloc[:,-1])
+pca_new_train_data=pca_new_train_data.drop(outliers)
 # %%
-# pca_new_train_data.to_csv("./new_train_pca_16_origin.txt")
-train_data.to_csv("./new_train.txt")
+pca_new_train_data.to_csv("./data/new_train_pca_16_origin.txt")
+# train_data.to_csv("./data/new_train.txt")
 # %%
-# pca_new_test_data.to_csv("./new_test_pca_16_origin.txt")
-test_data.to_csv("./new_test.txt")
+pca_new_test_data.to_csv("./data/new_test_pca_16_origin.txt")
+# test_data.to_csv("./data/new_test.txt")
 
 #%%
 # ShowKDE(pca_new_train_data,pca_new_test_data)

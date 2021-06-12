@@ -2,7 +2,7 @@
 Description: 增加Stacking预测
 Author: Rocky Hoo
 Date: 2021-06-03 10:25:54
-LastEditTime: 2021-06-08 12:16:34
+LastEditTime: 2021-06-09 21:48:45
 LastEditors: Please set LastEditors
 CopyRight: 
 Copyright (c) 2021 XiaoPeng Studio
@@ -40,15 +40,27 @@ import numpy as np
 import re
 #%%
 # 读取数据
-new_train_pca_16=pd.read_csv("./new_train.txt")
+new_train_pca_16=pd.read_csv("./data/new_train_pca_16_origin.txt")
 new_train_pca_16 = new_train_pca_16.rename(columns = lambda x:re.sub('[^A-Za-z0-9_]+', '', x))
+
+new_train=pd.read_csv("./data/new_train.txt")
+new_train = new_train.rename(columns = lambda x:re.sub('[^A-Za-z0-9_]+', '', x))
+
 new_train_pca_16=new_train_pca_16.fillna(0)
-train=new_train_pca_16[new_train_pca_16.columns[:-1]]
-target=new_train_pca_16["target"]
+new_train=new_train.fillna(0)
+
+linear_train=new_train_pca_16[new_train_pca_16.columns[:-1]]
+train=new_train[new_train.columns[:-1]]
+
+target=new_train["target"]
+target_linear=new_train_pca_16["target"]
+
 models=[]
+linear_models=[]
 # 处理特殊字符
 #%%
 train_data,test_data,train_target,test_target=train_test_split(train,target,test_size=0.3,random_state=0)
+linear_train_data,linear_test_data,linear_train_target,linear_test_target=train_test_split(linear_train,target_linear,test_size=0.3,random_state=0)
 
 #%%
 # 线性回归 score:0.000
@@ -248,6 +260,12 @@ def KRRRegression2(train_data,train_target,test_data,test_target):
     return KRR_Model2,test_pred14
 #%%
 #Average模型
+def Linear_Average(test_data):
+    predict_total=np.zeros((test_data.shape[0],))
+    for model in linear_models:
+        predict_total+=model.predict(test_data)
+    return pd.Series(np.round(predict_total/len(linear_models),3))
+
 def Average(test_data):
     predict_total=np.zeros((test_data.shape[0],))
     for model in models:
@@ -255,7 +273,7 @@ def Average(test_data):
     return pd.Series(np.round(predict_total/len(models),3))
 #%%
 """ 创建stack特征 """
-def Create_Stack_Features(data):
+def Create_Stack_Features(data,models):
     new_train={}
     columns=[]
     for model in models:
@@ -270,15 +288,79 @@ def Create_Stack_Features(data):
 @param {*} train:训练集所有数据
 @param {*} test:线上测试集所有数据
 '''
+def Linear_Stacking(train,test,pred):
+    stacked_train=Create_Stack_Features(train,linear_models)
+    stacked_pred=Create_Stack_Features(pred,linear_models)
+    stacked_test=Create_Stack_Features(test,linear_models)
+
+    linear_models.clear()
+    Linear_K_Fold(stacked_train)
+    return pd.DataFrame(stacked_test),pd.DataFrame(stacked_pred)
+    
 def Stacking(train,test,pred):
-    stacked_train=Create_Stack_Features(train)
-    stacked_pred=Create_Stack_Features(pred)
-    stacked_test=Create_Stack_Features(test)
+    stacked_train=Create_Stack_Features(train,models)
+    stacked_pred=Create_Stack_Features(pred,models)
+    stacked_test=Create_Stack_Features(test,models)
 
     models.clear()
     K_Fold(stacked_train)
     return pd.DataFrame(stacked_test),pd.DataFrame(stacked_pred)
     
+#%%
+def Linear_K_Fold(train):
+    kf=KFold(n_splits=5,random_state=1,shuffle=True)
+    for k,(train_index,test_index) in enumerate(kf.split(train)):
+        temp_model=[]
+        train_data=train.values[train_index]
+        test_data=train.values[test_index]
+        train_target=target_linear[train_index]
+        test_target=target_linear[test_index]
+        model1,test_pred1=MyLinearRegression(train_data,train_target,test_data,test_target)
+        # model2,test_pred2=RFRegression(train_data,train_target,test_data,test_target)
+        # model3,test_pred3=LGBRegression(train_data,train_target,test_data,test_target)
+        # model4,test_pred4=KNNRegression(train_data[0],train_target,test_data,test_target)
+        # model5,test_pred5=SGDRegression(train_data[0],train_target,test_data,test_target)
+        model6,test_pred6=RidgeRegression(train_data,train_target,test_data,test_target)
+        model7,test_pred7=LassoRegression(train_data,train_target,test_data,test_target)
+        model8,test_pred8=ElasticNetRegression(train_data,train_target,test_data,test_target)
+        model9,test_pred9=SVRRegression(train_data,train_target,test_data,test_target)
+        # model10,test_pred10=GBDTRegression(train_data,train_target,test_data,test_target)
+        # model11,test_pred11=XGBRegression(train_data,train_target,test_data,test_target)
+        # model12,test_pred12=MLPRegression(train_data,train_target,test_data,test_target)
+        model13,test_pred13=KRRRegression1(train_data,train_target,test_data,test_target)
+        model14,test_pred14=KRRRegression2(train_data,train_target,test_data,test_target)
+        linear_models.append(model1)
+        # models.append(model2)
+        # models.append(model3)
+        # models.append(model4)
+        # models.append(model5)
+        linear_models.append(model6)
+        linear_models.append(model7)
+        linear_models.append(model8)
+        linear_models.append(model9)
+        # models.append(model10)
+        # models.append(model11)
+        # models.append(model12)
+        linear_models.append(model13)
+        linear_models.append(model14)
+        
+        temp_model.append(test_pred1)
+        # temp_model.append(test_pred2)
+        # temp_model.append(test_pred3)
+        # models.append(test_pred4)
+        # models.append(model5)
+        temp_model.append(test_pred6)
+        temp_model.append(test_pred7)
+        temp_model.append(test_pred8)
+        temp_model.append(test_pred9)
+        # temp_model.append(test_pred10)
+        # temp_model.append(test_pred11)
+        # temp_model.append(test_pred12)
+        temp_model.append(test_pred13)
+        temp_model.append(test_pred14)
+
+        score_test=mean_squared_error(test_target,sum(temp_model)/len(temp_model))
+        print(k," fold","train_mse:",score_test,'\n')
 #%%
 def K_Fold(train):
     kf=KFold(n_splits=5,random_state=1,shuffle=True)
@@ -288,66 +370,73 @@ def K_Fold(train):
         test_data=train.values[test_index]
         train_target=target[train_index]
         test_target=target[test_index]
-        model1,test_pred1=MyLinearRegression(train_data,train_target,test_data,test_target)
+        # model1,test_pred1=MyLinearRegression(train_data,train_target,test_data,test_target)
         model2,test_pred2=RFRegression(train_data,train_target,test_data,test_target)
         model3,test_pred3=LGBRegression(train_data,train_target,test_data,test_target)
         # model4,test_pred4=KNNRegression(train_data[0],train_target,test_data,test_target)
         # model5,test_pred5=SGDRegression(train_data[0],train_target,test_data,test_target)
-        model6,test_pred6=RidgeRegression(train_data,train_target,test_data,test_target)
-        model7,test_pred7=LassoRegression(train_data,train_target,test_data,test_target)
-        model8,test_pred8=ElasticNetRegression(train_data,train_target,test_data,test_target)
-        model9,test_pred9=SVRRegression(train_data,train_target,test_data,test_target)
+        # model6,test_pred6=RidgeRegression(train_data,train_target,test_data,test_target)
+        # model7,test_pred7=LassoRegression(train_data,train_target,test_data,test_target)
+        # model8,test_pred8=ElasticNetRegression(train_data,train_target,test_data,test_target)
+        # model9,test_pred9=SVRRegression(train_data,train_target,test_data,test_target)
         model10,test_pred10=GBDTRegression(train_data,train_target,test_data,test_target)
         model11,test_pred11=XGBRegression(train_data,train_target,test_data,test_target)
         model12,test_pred12=MLPRegression(train_data,train_target,test_data,test_target)
-        model13,test_pred13=KRRRegression1(train_data,train_target,test_data,test_target)
-        model14,test_pred14=KRRRegression2(train_data,train_target,test_data,test_target)
-        models.append(model1)
+        # model13,test_pred13=KRRRegression1(train_data,train_target,test_data,test_target)
+        # model14,test_pred14=KRRRegression2(train_data,train_target,test_data,test_target)
+        # models.append(model1)
         models.append(model2)
         models.append(model3)
         # models.append(model4)
         # models.append(model5)
-        models.append(model6)
-        models.append(model7)
-        models.append(model8)
-        models.append(model9)
+        # models.append(model6)
+        # models.append(model7)
+        # models.append(model8)
+        # models.append(model9)
         models.append(model10)
         models.append(model11)
         models.append(model12)
-        models.append(model13)
-        models.append(model14)
+        # models.append(model13)
+        # models.append(model14)
         
-        temp_model.append(test_pred1)
+        # temp_model.append(test_pred1)
         temp_model.append(test_pred2)
         temp_model.append(test_pred3)
-        # models.append(test_pred4)
-        # models.append(model5)
-        temp_model.append(test_pred6)
-        temp_model.append(test_pred7)
-        temp_model.append(test_pred8)
-        temp_model.append(test_pred9)
+        # temp_model.append(test_pred4)
+        # temp_model.append(test_pred5)
+        # temp_model.append(test_pred6)
+        # temp_model.append(test_pred7)
+        # temp_model.append(test_pred8)
+        # temp_model.append(test_pred9)
         temp_model.append(test_pred10)
         temp_model.append(test_pred11)
         temp_model.append(test_pred12)
-        temp_model.append(test_pred13)
-        temp_model.append(test_pred14)
+        # temp_model.append(test_pred13)
+        # temp_model.append(test_pred14)
 
         score_test=mean_squared_error(test_target,sum(temp_model)/len(temp_model))
         print(k," fold","train_mse:",score_test,'\n')
 #%%
-final_test_data=pd.read_csv("./new_test.txt")
+final_test_data=pd.read_csv("./data/new_test.txt")
 # %%
 # K_Fold(train_data)
+Linear_K_Fold(linear_train)
 K_Fold(train)
-stacked_test,stacked_pred=Stacking(train,test_data,final_test_data)
-ans=Average(stacked_pred)
+stacked_test_linear,stacked_pred_linear=Linear_Stacking(linear_train_data,linear_test_data,final_test_data)
+stacked_test,stacked_pred=Stacking(train_data,test_data,final_test_data)
+ans2=Linear_Average(stacked_pred_linear)
+ans1=Average(stacked_pred)
+ans=pd.Series(np.round(ans1+ans2/2,3))
 # ans=Average(final_test_data)
 # %%
 ans.to_csv('./predict_.txt',header = None,index = False)
 # %%
 train_ans=Average(stacked_test)
+linear_train_ans=Linear_Average(stacked_test_linear)
+# train_ans=pd.Series(np.round(Average(stacked_test)+Linear_Average(stacked_test_linear)/2,3))
 # train_ans=Average(test_data)
 print("stack_test score:",mean_squared_error(test_target,train_ans))
+print("linear_stack_test score:",mean_squared_error(linear_test_target,linear_train_ans))
 #%%
 # from sklearn.model_selection import ShuffleSplit
 # clf=SGDRegressor()
